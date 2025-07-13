@@ -42,26 +42,41 @@ html {
   animation: gradient 3s ease infinite;
 }
 
-/* Vind theme gradient */
+/* Vind theme gradient with new color scheme */
 .vind-gradient {
-  background: hsla(152, 100%, 50%, 1);
-  background: linear-gradient(90deg, hsla(152, 100%, 50%, 1) 0%, hsla(186, 100%, 69%, 1) 100%);
-  background: -moz-linear-gradient(90deg, hsla(152, 100%, 50%, 1) 0%, hsla(186, 100%, 69%, 1) 100%);
-  background: -webkit-linear-gradient(90deg, hsla(152, 100%, 50%, 1) 0%, hsla(186, 100%, 69%, 1) 100%);
+  background: #00F0FF;
+  background: linear-gradient(90deg, #00F0FF 0%, #1E90FF 100%);
+  background: -moz-linear-gradient(90deg, #00F0FF 0%, #1E90FF 100%);
+  background: -webkit-linear-gradient(90deg, #00F0FF 0%, #1E90FF 100%);
 }
 
 .vind-gradient-vertical {
-  background: hsla(152, 100%, 50%, 1);
-  background: linear-gradient(180deg, hsla(152, 100%, 50%, 1) 0%, hsla(186, 100%, 69%, 1) 100%);
-  background: -moz-linear-gradient(180deg, hsla(152, 100%, 50%, 1) 0%, hsla(186, 100%, 69%, 1) 100%);
-  background: -webkit-linear-gradient(180deg, hsla(152, 100%, 50%, 1) 0%, hsla(186, 100%, 69%, 1) 100%);
+  background: #00F0FF;
+  background: linear-gradient(180deg, #00F0FF 0%, #1E90FF 100%);
+  background: -moz-linear-gradient(180deg, #00F0FF 0%, #1E90FF 100%);
+  background: -webkit-linear-gradient(180deg, #00F0FF 0%, #1E90FF 100%);
 }
 
 .vind-gradient-diagonal {
-  background: hsla(152, 100%, 50%, 1);
-  background: linear-gradient(135deg, hsla(152, 100%, 50%, 1) 0%, hsla(186, 100%, 69%, 1) 100%);
-  background: -moz-linear-gradient(135deg, hsla(152, 100%, 50%, 1) 0%, hsla(186, 100%, 69%, 1) 100%);
-  background: -webkit-linear-gradient(135deg, hsla(152, 100%, 50%, 1) 0%, hsla(186, 100%, 69%, 1) 100%);
+  background: #00F0FF;
+  background: linear-gradient(135deg, #00F0FF 0%, #1E90FF 100%);
+  background: -moz-linear-gradient(135deg, #00F0FF 0%, #1E90FF 100%);
+  background: -webkit-linear-gradient(135deg, #00F0FF 0%, #1E90FF 100%);
+}
+
+/* New accent gradient with highlight color */
+.vind-accent-gradient {
+  background: #BF00FF;
+  background: linear-gradient(90deg, #BF00FF 0%, #1E90FF 100%);
+  background: -moz-linear-gradient(90deg, #BF00FF 0%, #1E90FF 100%);
+  background: -webkit-linear-gradient(90deg, #BF00FF 0%, #1E90FF 100%);
+}
+
+/* Full spectrum gradient */
+.vind-full-gradient {
+  background: linear-gradient(45deg, #00F0FF 0%, #1E90FF 50%, #BF00FF 100%);
+  background: -moz-linear-gradient(45deg, #00F0FF 0%, #1E90FF 50%, #BF00FF 100%);
+  background: -webkit-linear-gradient(45deg, #00F0FF 0%, #1E90FF 50%, #BF00FF 100%);
 }
 
 /* Pulsing gradient animation */

@@ -1,97 +1,137 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getVideosCollection } from '@/lib/mongodb';
+import { ObjectId } from 'mongodb';
+import { sampleVideos } from '@/scripts/seedVideos';
 
-// Mock database - in a real app, this would be a proper database
-let videos: any[] = [
-  {
-    id: '1',
-    username: 'creative_user',
-    description: 'Check out this amazing view! 🌅 Perfect morning vibes with nature\'s beauty #nature #sunrise #peaceful',
-    likes: 1234,
-    comments: 89,
-    shares: 45,
-    playback_id: 'demo-1',
-    created_at: new Date('2025-07-10T08:00:00Z').toISOString(),
-    user_avatar: null,
-    verified: false,
-  },
-  {
-    id: '2',
-    username: 'funny_creator',
-    description: 'When you realize it\'s Monday again 😅 We\'ve all been there! #mondayvibes #relatable #mood',
-    likes: 892,
-    comments: 156,
-    shares: 23,
-    playback_id: 'demo-2',
-    created_at: new Date('2025-07-10T12:30:00Z').toISOString(),
-    user_avatar: null,
-    verified: true,
-  },
-  {
-    id: '3',
-    username: 'artist_daily',
-    description: 'Quick sketch time-lapse ✨ Watch me bring this character to life in just 6 seconds! #art #drawing #creative',
-    likes: 2341,
-    comments: 234,
-    shares: 89,
-    playback_id: 'demo-3',
-    created_at: new Date('2025-07-10T15:45:00Z').toISOString(),
-    user_avatar: null,
-    verified: true,
-  },
-  {
-    id: '4',
-    username: 'foodie_explorer',
-    description: 'Best ramen in Tokyo! 🍜 This place is absolutely incredible - the broth is perfect! #food #ramen #tokyo',
-    likes: 1876,
-    comments: 127,
-    shares: 67,
-    playback_id: 'demo-4',
-    created_at: new Date('2025-07-10T18:20:00Z').toISOString(),
-    user_avatar: null,
-    verified: false,
-  },
-  {
-    id: '5',
-    username: 'travel_addict',
-    description: 'Hidden gem in Iceland 🏔️ This place doesn\'t even show up on maps! #travel #iceland #adventure',
-    likes: 3421,
-    comments: 298,
-    shares: 156,
-    playback_id: 'demo-5',
-    created_at: new Date('2025-07-11T09:10:00Z').toISOString(),
-    user_avatar: null,
-    verified: true,
+// Initialize MongoDB with sample data if collection is empty
+async function initializeVideos() {
+  try {
+    const videosCollection = await getVideosCollection();
+    const count = await videosCollection.countDocuments();
+    
+    if (count === 0) {
+      console.log('Initializing videos collection with sample data...');
+      // Add demo videos and real seeded videos
+      const demoVideos = [
+        {
+          id: '1',
+          username: 'creative_user',
+          description: 'Check out this amazing view! 🌅 Perfect morning vibes with nature\'s beauty #nature #sunrise #peaceful',
+          likes: 1234,
+          comments: 89,
+          shares: 45,
+          playback_id: 'demo-1',
+          created_at: new Date('2025-07-10T08:00:00Z').toISOString(),
+          user_avatar: null,
+          verified: false,
+        },
+        {
+          id: '2',
+          username: 'funny_creator',
+          description: 'When you realize it\'s Monday again 😅 We\'ve all been there! #mondayvibes #relatable #mood',
+          likes: 892,
+          comments: 156,
+          shares: 23,
+          playback_id: 'demo-2',
+          created_at: new Date('2025-07-10T12:30:00Z').toISOString(),
+          user_avatar: null,
+          verified: true,
+        },
+        {
+          id: '3',
+          username: 'artist_daily',
+          description: 'Quick sketch time-lapse ✨ Watch me bring this character to life in just 6 seconds! #art #drawing #creative',
+          likes: 2341,
+          comments: 234,
+          shares: 89,
+          playback_id: 'demo-3',
+          created_at: new Date('2025-07-10T15:45:00Z').toISOString(),
+          user_avatar: null,
+          verified: true,
+        },
+        {
+          id: '4',
+          username: 'foodie_explorer',
+          description: 'Best ramen in Tokyo! 🍜 This place is absolutely incredible - the broth is perfect! #food #ramen #tokyo',
+          likes: 1876,
+          comments: 127,
+          shares: 67,
+          playback_id: 'demo-4',
+          created_at: new Date('2025-07-10T18:20:00Z').toISOString(),
+          user_avatar: null,
+          verified: false,
+        },
+        {
+          id: '5',
+          username: 'travel_addict',
+          description: 'Hidden gem in Iceland 🏔️ This place doesn\'t even show up on maps! #travel #iceland #adventure',
+          likes: 3421,
+          comments: 298,
+          shares: 156,
+          playback_id: 'demo-5',
+          created_at: new Date('2025-07-11T09:10:00Z').toISOString(),
+          user_avatar: null,
+          verified: true,
+        }
+      ];
+      
+      // Combine demo videos and real seeded videos
+      const allVideos = [...demoVideos, ...sampleVideos];
+      await videosCollection.insertMany(allVideos);
+      console.log(`Initialized ${allVideos.length} videos in MongoDB`);
+    }
+  } catch (error) {
+    console.error('Error initializing videos:', error);
   }
-];
+}
 
 export async function GET(request: NextRequest) {
   try {
+    // Initialize videos if needed
+    await initializeVideos();
+    
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const search = searchParams.get('search') || '';
 
-    let filteredVideos = videos;
-
-    // Filter by search term
+    const videosCollection = await getVideosCollection();
+    
+    // Build query
+    let query: any = {};
     if (search) {
-      filteredVideos = videos.filter(video => 
-        video.description.toLowerCase().includes(search.toLowerCase()) ||
-        video.username.toLowerCase().includes(search.toLowerCase())
-      );
+      query = {
+        $or: [
+          { description: { $regex: search, $options: 'i' } },
+          { username: { $regex: search, $options: 'i' } }
+        ]
+      };
     }
 
-    // Pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedVideos = filteredVideos.slice(startIndex, endIndex);
+    // Get total count for pagination
+    const total = await videosCollection.countDocuments(query);
+
+    // Get paginated results
+    const videos = await videosCollection
+      .find(query)
+      .sort({ created_at: -1 }) // Sort by newest first
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .toArray();
+
+    // Convert MongoDB _id to string id for frontend
+    const formattedVideos = videos.map(video => ({
+      ...video,
+      id: video._id?.toString() || video.id,
+      _id: undefined
+    }));
 
     return NextResponse.json({
-      videos: paginatedVideos,
-      total: filteredVideos.length,
+      videos: formattedVideos,
+      total,
       page,
       limit,
-      hasMore: endIndex < filteredVideos.length,
+      hasMore: (page * limit) < total,
     });
   } catch (error) {
     console.error('Error fetching videos:', error);
@@ -106,8 +146,18 @@ export async function POST(request: NextRequest) {
   try {
     const { username, description, playback_id, asset_id } = await request.json();
 
+    // Validate required fields
+    if (!username || !description || !playback_id || !asset_id) {
+      return NextResponse.json(
+        { error: 'Missing required fields: username, description, playback_id, asset_id' },
+        { status: 400 }
+      );
+    }
+
+    const videosCollection = await getVideosCollection();
+
     const newVideo = {
-      id: Date.now().toString(),
+      id: new ObjectId().toString(),
       username,
       description,
       likes: 0,
@@ -120,9 +170,15 @@ export async function POST(request: NextRequest) {
       verified: false,
     };
 
-    videos.unshift(newVideo); // Add to beginning of array
+    const result = await videosCollection.insertOne(newVideo);
 
-    return NextResponse.json(newVideo);
+    // Return the created video with MongoDB _id as id
+    const createdVideo = {
+      ...newVideo,
+      id: result.insertedId.toString(),
+    };
+
+    return NextResponse.json(createdVideo);
   } catch (error) {
     console.error('Error creating video:', error);
     return NextResponse.json(
@@ -145,25 +201,37 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const videoIndex = videos.findIndex(v => v.id === videoId);
-    if (videoIndex === -1) {
+    const videosCollection = await getVideosCollection();
+    
+    // Try to find by custom id first, then by MongoDB _id
+    let query: any = { id: videoId };
+    if (ObjectId.isValid(videoId)) {
+      query = { $or: [{ id: videoId }, { _id: new ObjectId(videoId) }] };
+    }
+
+    const video = await videosCollection.findOne(query);
+
+    if (!video) {
       return NextResponse.json(
         { error: 'Video not found' },
         { status: 404 }
       );
     }
 
-    const video = videos[videoIndex];
+    let updateOperation: any = {};
 
     switch (action) {
       case 'like':
-        video.likes += 1;
+        updateOperation = { $inc: { likes: 1 } };
         break;
       case 'unlike':
-        video.likes = Math.max(0, video.likes - 1);
+        updateOperation = { $inc: { likes: -1 } };
+        break;
+      case 'comment':
+        updateOperation = { $inc: { comments: 1 } };
         break;
       case 'share':
-        video.shares += 1;
+        updateOperation = { $inc: { shares: 1 } };
         break;
       default:
         return NextResponse.json(
@@ -172,7 +240,9 @@ export async function PATCH(request: NextRequest) {
         );
     }
 
-    return NextResponse.json(video);
+    await videosCollection.updateOne(query, updateOperation);
+
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error updating video:', error);
     return NextResponse.json(

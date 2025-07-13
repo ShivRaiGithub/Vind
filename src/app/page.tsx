@@ -8,6 +8,9 @@ import VideoUpload from "@/components/VideoUpload";
 import SearchModal from "@/components/SearchModal";
 import CommentsModal from "@/components/CommentsModal";
 import UserProfile from "@/components/UserProfile";
+import SavedVideos from "@/components/SavedVideos";
+import AuthModal from "@/components/AuthModal";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Heart, MessageCircle, Share, Bookmark } from "lucide-react";
 
 interface Video {
@@ -22,7 +25,7 @@ interface Video {
   verified?: boolean;
 }
 
-export default function Home() {
+function AppContent() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [currentVideo, setCurrentVideo] = useState(0);
   const [likedVideos, setLikedVideos] = useState<Set<number | string>>(new Set());
@@ -32,14 +35,25 @@ export default function Home() {
   const [showSearch, setShowSearch] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   const [selectedVideoForComments, setSelectedVideoForComments] = useState<Video | null>(null);
   const [selectedUsername, setSelectedUsername] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  const { user, loading } = useAuth();
 
   // Load videos from API
   useEffect(() => {
     loadVideos();
   }, []);
+
+  // Load saved videos when user is available
+  useEffect(() => {
+    if (user && !loading) {
+      loadSavedVideos();
+    }
+  }, [user, loading]);
 
   useEffect(() => {
     // Hide welcome message after 3 seconds
@@ -65,7 +79,33 @@ export default function Home() {
     }
   };
 
+  const loadSavedVideos = async () => {
+    if (!user?.username) return;
+    
+    try {
+      const response = await fetch(`/api/videos/saved?username=${encodeURIComponent(user.username)}`);
+      const data = await response.json();
+      
+      if (data.success && data.videos) {
+        setSavedVideos(prev => {
+          const newSaved = new Set<string | number>();
+          data.videos.forEach((video: any) => {
+            newSaved.add(video.id);
+          });
+          return newSaved;
+        });
+      }
+    } catch (error) {
+      console.error('Error loading saved videos:', error);
+    }
+  };
+
   const handleLike = async (videoId: number | string) => {
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
+    
     const isCurrentlyLiked = likedVideos.has(videoId);
     
     // Optimistic update
@@ -107,16 +147,66 @@ export default function Home() {
     }
   };
 
-  const handleSave = (videoId: number | string) => {
-    setSavedVideos(prev => {
-      const newSaved = new Set(prev);
-      if (newSaved.has(videoId)) {
-        newSaved.delete(videoId);
-      } else {
-        newSaved.add(videoId);
+  const handleSave = async (videoId: number | string) => {
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
+    
+    try {
+      const action = savedVideos.has(videoId) ? 'unsave' : 'save';
+      
+      // Optimistic update
+      setSavedVideos(prev => {
+        const newSaved = new Set(prev);
+        if (action === 'save') {
+          newSaved.add(videoId);
+        } else {
+          newSaved.delete(videoId);
+        }
+        return newSaved;
+      });
+
+      // API call
+      const response = await fetch('/api/videos/saved', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          videoId: videoId.toString(),
+          username: user.username,
+          action: action
+        }),
+      });
+
+      if (!response.ok) {
+        // Revert optimistic update on failure
+        setSavedVideos(prev => {
+          const newSaved = new Set(prev);
+          if (action === 'save') {
+            newSaved.delete(videoId);
+          } else {
+            newSaved.add(videoId);
+          }
+          return newSaved;
+        });
+        console.error('Failed to save/unsave video');
       }
-      return newSaved;
-    });
+    } catch (error) {
+      // Revert optimistic update on error
+      setSavedVideos(prev => {
+        const newSaved = new Set(prev);
+        const currentAction = savedVideos.has(videoId) ? 'save' : 'unsave';
+        if (currentAction === 'save') {
+          newSaved.delete(videoId);
+        } else {
+          newSaved.add(videoId);
+        }
+        return newSaved;
+      });
+      console.error('Error saving/unsaving video:', error);
+    }
   };
 
   const handleShare = async (videoId: number | string) => {
@@ -152,8 +242,23 @@ export default function Home() {
   };
 
   const handleComments = (video: Video) => {
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
     setSelectedVideoForComments(video);
     setShowComments(true);
+  };
+
+  const handleCommentAdded = () => {
+    // Update the comment count for the current video
+    if (selectedVideoForComments) {
+      setVideos(prev => prev.map(video => 
+        video.id === selectedVideoForComments.id 
+          ? { ...video, comments: video.comments + 1 }
+          : video
+      ));
+    }
   };
 
   const handleProfileView = (username: string) => {
@@ -163,12 +268,40 @@ export default function Home() {
 
   const handleUploadComplete = (newVideo: Video) => {
     setVideos(prev => [newVideo, ...prev]);
+    setShowUpload(false);
   };
 
-  const handleVideoSelect = (video: Video) => {
-    const videoIndex = videos.findIndex(v => v.id === video.id);
+  const handleAuthClick = () => {
+    if (user) {
+      setSelectedUsername(user.username);
+      setShowProfile(true);
+    } else {
+      setShowAuth(true);
+    }
+  };
+
+  const handleUpload = () => {
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
+    setShowUpload(true);
+  };
+
+  const handleVideoSelect = (videoId: string) => {
+    const videoIndex = videos.findIndex(v => v.id.toString() === videoId);
     if (videoIndex !== -1) {
       setCurrentVideo(videoIndex);
+      setShowSearch(false);
+    }
+  };
+
+  // Handle video selection from user profile
+  const handleProfileVideoSelect = (video: any) => {
+    const videoIndex = videos.findIndex(v => v.id.toString() === video.id);
+    if (videoIndex !== -1) {
+      setCurrentVideo(videoIndex);
+      setShowProfile(false);
     }
   };
 
@@ -187,7 +320,10 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-black text-white overflow-hidden">
-      <Header />
+      <Header 
+        onSearchClick={() => setShowSearch(true)}
+        onAuthClick={handleAuthClick}
+      />
       
       {/* Main Video Feed */}
       <main className="pt-16 pb-20 snap-y snap-mandatory overflow-y-scroll h-screen">
@@ -203,6 +339,7 @@ export default function Home() {
                       setCurrentVideo(index);
                     }
                   }}
+                  onUsernameClick={handleProfileView}
                 />
 
                 {/* Action Buttons */}
@@ -292,9 +429,10 @@ export default function Home() {
       </main>
 
       <BottomNavigation 
-        onUploadClick={() => setShowUpload(true)}
+        onUploadClick={handleUpload}
         onSearchClick={() => setShowSearch(true)}
-        onProfileClick={() => setShowProfile(true)}
+        onProfileClick={handleAuthClick}
+        onSavedClick={() => setShowSaved(true)}
       />
 
       {/* Modals */}
@@ -319,6 +457,7 @@ export default function Home() {
           onClose={() => setShowComments(false)}
           videoId={selectedVideoForComments.id.toString()}
           videoUsername={selectedVideoForComments.username}
+          onCommentAdded={handleCommentAdded}
         />
       )}
 
@@ -327,6 +466,16 @@ export default function Home() {
           isOpen={showProfile}
           onClose={() => setShowProfile(false)}
           username={selectedUsername}
+          onVideoSelect={handleProfileVideoSelect}
+        />
+      )}
+
+      {/* Saved Videos Modal */}
+      {showSaved && (
+        <SavedVideos
+          isOpen={showSaved}
+          onClose={() => setShowSaved(false)}
+          onVideoSelect={handleProfileVideoSelect}
         />
       )}
 
@@ -351,6 +500,19 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <AuthModal 
+        isOpen={showAuth}
+        onClose={() => setShowAuth(false)}
+      />
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Mux from '@mux/mux-node';
+import jwt from 'jsonwebtoken';
 
 // Initialize Mux (you'll need to add your credentials)
 const mux = new Mux({
@@ -9,6 +10,26 @@ const mux = new Mux({
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.split(' ')[1] || request.cookies.get('vind_token')?.value;
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Authentication required. Please log in to upload videos.' },
+        { status: 401 }
+      );
+    }
+
+    try {
+      jwt.verify(token, process.env.JWT_SECRET!);
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Invalid token. Please log in again.' },
+        { status: 401 }
+      );
+    }
+
     const { filename } = await request.json();
 
     // Create a direct upload
@@ -17,7 +38,6 @@ export async function POST(request: NextRequest) {
       new_asset_settings: {
         playback_policy: ['public'],
         encoding_tier: 'baseline',
-        video_quality: 'plus',
         max_resolution_tier: '1080p',
       },
     });
@@ -49,9 +69,23 @@ export async function GET(request: NextRequest) {
 
     const upload = await mux.video.uploads.retrieve(uploadId);
     
+    // If asset is created, get the playback ID
+    let playback_id = null;
+    if (upload.asset_id) {
+      try {
+        const asset = await mux.video.assets.retrieve(upload.asset_id);
+        if (asset.playback_ids && asset.playback_ids.length > 0) {
+          playback_id = asset.playback_ids[0].id;
+        }
+      } catch (assetError) {
+        console.error('Error retrieving asset:', assetError);
+      }
+    }
+    
     return NextResponse.json({
       status: upload.status,
       asset_id: upload.asset_id,
+      playback_id: playback_id,
       error: upload.error,
     });
   } catch (error) {

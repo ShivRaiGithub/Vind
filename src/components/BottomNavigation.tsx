@@ -1,18 +1,20 @@
 "use client";
 
-import { Home as HomeIcon, Search, PlusCircle, Upload, User } from "lucide-react";
+import { Home as HomeIcon, Search, PlusCircle, User, Bookmark } from "lucide-react";
 import { useState } from "react";
 
 interface BottomNavigationProps {
   onUploadClick?: () => void;
   onSearchClick?: () => void;
   onProfileClick?: () => void;
+  onSavedClick?: () => void;
 }
 
 export default function BottomNavigation({ 
   onUploadClick, 
   onSearchClick, 
-  onProfileClick 
+  onProfileClick,
+  onSavedClick 
 }: BottomNavigationProps) {
   const [activeTab, setActiveTab] = useState("home");
 
@@ -20,7 +22,7 @@ export default function BottomNavigation({
     { id: "home", icon: HomeIcon, label: "Home", onClick: () => setActiveTab("home") },
     { id: "search", icon: Search, label: "Search", onClick: onSearchClick },
     { id: "create", icon: PlusCircle, label: "Create", isSpecial: true, onClick: onUploadClick },
-    { id: "upload", icon: Upload, label: "Upload", onClick: onUploadClick },
+    { id: "saved", icon: Bookmark, label: "Saved", onClick: onSavedClick },
     { id: "profile", icon: User, label: "Profile", onClick: onProfileClick },
   ];
 

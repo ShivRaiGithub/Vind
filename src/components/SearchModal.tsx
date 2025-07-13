@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Search, X, TrendingUp, Clock, Hash } from 'lucide-react';
+import { Search, X, TrendingUp, Hash } from 'lucide-react';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -13,15 +13,10 @@ const trendingSearches = [
   '#viral', '#comedy', '#art', '#food', '#travel', '#music', '#dance', '#pets'
 ];
 
-const recentSearches = [
-  'funny cats', 'art tutorials', 'travel vlogs', 'cooking tips'
-];
-
 export default function SearchModal({ isOpen, onClose, onVideoSelect }: SearchModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [recentSearchList, setRecentSearchList] = useState(recentSearches);
 
   useEffect(() => {
     if (searchQuery.length > 2) {
@@ -51,9 +46,6 @@ export default function SearchModal({ isOpen, onClose, onVideoSelect }: SearchMo
 
   const handleSearchSubmit = (query: string) => {
     if (query.trim()) {
-      // Add to recent searches
-      const newRecent = [query, ...recentSearchList.filter(item => item !== query)].slice(0, 8);
-      setRecentSearchList(newRecent);
       setSearchQuery(query);
     }
   };
@@ -77,7 +69,7 @@ export default function SearchModal({ isOpen, onClose, onVideoSelect }: SearchMo
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearchSubmit(searchQuery)}
             placeholder="Search Vinds..."
-            className="w-full pl-12 pr-10 py-3 bg-gray-900 border border-gray-700 rounded-full text-white placeholder-gray-400 focus:outline-none focus:border-green-400"
+            className="w-full pl-12 pr-10 py-3 bg-gray-900 border border-gray-700 rounded-full text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
             autoFocus
           />
           {searchQuery && (
@@ -104,7 +96,7 @@ export default function SearchModal({ isOpen, onClose, onVideoSelect }: SearchMo
             {/* Trending */}
             <div>
               <div className="flex items-center mb-3">
-                <TrendingUp className="w-5 h-5 text-green-400 mr-2" />
+                <TrendingUp className="w-5 h-5 text-primary-500 mr-2" />
                 <h3 className="text-white font-semibold">Trending</h3>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -120,57 +112,62 @@ export default function SearchModal({ isOpen, onClose, onVideoSelect }: SearchMo
                 ))}
               </div>
             </div>
-
-            {/* Recent Searches */}
-            {recentSearchList.length > 0 && (
-              <div>
-                <div className="flex items-center mb-3">
-                  <Clock className="w-5 h-5 text-gray-400 mr-2" />
-                  <h3 className="text-white font-semibold">Recent</h3>
-                </div>
-                <div className="space-y-2">
-                  {recentSearchList.map((search, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSearchSubmit(search)}
-                      className="flex items-center w-full p-3 hover:bg-gray-800 rounded-lg text-left transition-colors"
-                    >
-                      <Search className="w-4 h-4 text-gray-400 mr-3" />
-                      <span className="text-white">{search}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <div className="p-4">
             {isLoading ? (
               <div className="flex justify-center py-8">
-                <div className="w-8 h-8 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : searchResults.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-4 gap-1">
                 {searchResults.map((video: any) => (
                   <button
                     key={video.id}
                     onClick={() => {
-                      onVideoSelect(video);
+                      onVideoSelect(video.id.toString());
                       onClose();
                     }}
-                    className="aspect-[9/16] bg-gray-800 rounded-lg overflow-hidden hover:scale-105 transition-transform group"
+                    className="aspect-[3/4] bg-gray-800 rounded-md overflow-hidden hover:scale-[1.02] transition-transform group relative"
                   >
                     <div className="w-full h-full vind-gradient-diagonal relative flex items-center justify-center">
-                      <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
-                      <div className="relative text-center p-3">
-                        <h4 className="text-white font-semibold text-sm mb-1 line-clamp-2">
+                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+                      <div className="relative text-center">
+                        <h2 className="text-lg font-bold text-black mb-1">VIND</h2>
+                        <h4 className="text-black font-medium text-xs mb-0.5 line-clamp-1">
                           @{video.username}
                         </h4>
-                        <p className="text-gray-200 text-xs line-clamp-3">
-                          {video.description}
-                        </p>
-                        <div className="flex items-center justify-center mt-2 text-xs text-gray-300">
-                          <span>{video.likes} likes</span>
+                        <div className="flex items-center justify-center text-xs text-black/80">
+                          <span className="flex items-center">
+                            <span className="mr-1">♥</span>
+                            {video.likes ? (video.likes > 999 ? `${(video.likes / 1000).toFixed(1)}k` : video.likes) : '0'}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Video for hover preview */}
+                      {video.playback_id && (
+                        <video
+                          src={`https://stream.mux.com/${video.playback_id}.m3u8`}
+                          className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-80 transition-opacity duration-300"
+                          muted
+                          playsInline
+                          loop
+                          onMouseEnter={(e) => {
+                            const videoEl = e.target as HTMLVideoElement;
+                            videoEl.currentTime = 0;
+                            videoEl.play().catch(() => {});
+                          }}
+                          onMouseLeave={(e) => {
+                            const videoEl = e.target as HTMLVideoElement;
+                            videoEl.pause();
+                            videoEl.currentTime = 0;
+                          }}
+                        />
+                      )}
+                      {/* Play icon overlay */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="w-6 h-6 bg-black/60 rounded-full flex items-center justify-center backdrop-blur-sm">
+                          <div className="w-0 h-0 border-l-[4px] border-l-white border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent ml-0.5"></div>
                         </div>
                       </div>
                     </div>

@@ -18,12 +18,14 @@ interface EnhancedVideoPlayerProps {
   };
   isActive: boolean;
   onPlayStateChange?: (playing: boolean) => void;
+  onUsernameClick?: (username: string) => void;
 }
 
 export default function EnhancedVideoPlayer({ 
   video, 
   isActive, 
-  onPlayStateChange 
+  onPlayStateChange,
+  onUsernameClick 
 }: EnhancedVideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -35,27 +37,60 @@ export default function EnhancedVideoPlayer({
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (isActive && playerRef.current) {
-      playerRef.current.play();
-      setIsPlaying(true);
-    } else if (!isActive && playerRef.current) {
-      playerRef.current.pause();
-      setIsPlaying(false);
-    }
+    const handleVideoSwitch = async () => {
+      if (!playerRef.current) return;
+
+      try {
+        if (isActive) {
+          // Only play if the video is actually visible and ready
+          const canPlay = playerRef.current.readyState >= 2; // HAVE_CURRENT_DATA
+          if (canPlay) {
+            await playerRef.current.play();
+            setIsPlaying(true);
+          } else {
+            // Wait for video to be ready
+            const handleCanPlay = async () => {
+              try {
+                await playerRef.current.play();
+                setIsPlaying(true);
+              } catch (error) {
+                console.log('Auto-play interrupted:', error);
+              }
+              playerRef.current.removeEventListener('canplay', handleCanPlay);
+            };
+            playerRef.current.addEventListener('canplay', handleCanPlay);
+          }
+        } else {
+          playerRef.current.pause();
+          setIsPlaying(false);
+        }
+      } catch (error) {
+        console.log('Video switch interrupted:', error);
+        setIsPlaying(false);
+      }
+    };
+
+    handleVideoSwitch();
   }, [isActive]);
 
   useEffect(() => {
     onPlayStateChange?.(isPlaying);
   }, [isPlaying, onPlayStateChange]);
 
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
     if (playerRef.current) {
-      if (isPlaying) {
-        playerRef.current.pause();
-      } else {
-        playerRef.current.play();
+      try {
+        if (isPlaying) {
+          playerRef.current.pause();
+          setIsPlaying(false);
+        } else {
+          await playerRef.current.play();
+          setIsPlaying(true);
+        }
+      } catch (error) {
+        console.log('Playback interrupted:', error);
+        // Ignore play interruption errors as they're common during rapid navigation
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -131,7 +166,12 @@ export default function EnhancedVideoPlayer({
             playbackId={video.playback_id}
             loop
             muted={isMuted}
+            autoPlay={false}
+            preload="metadata"
             className="w-full h-full object-cover"
+            disableTracking={true}
+            disableCookies={true}
+            crossOrigin="anonymous"
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onTimeUpdate={(e: any) => {
@@ -143,6 +183,19 @@ export default function EnhancedVideoPlayer({
             }}
             onLoadedMetadata={(e: any) => {
               setDuration(e.target.duration);
+            }}
+            onError={(error: any) => {
+              console.log('Mux Player Error (non-critical):', error);
+              // Don't throw errors for common playback issues
+            }}
+            onAbort={() => {
+              console.log('Playback aborted (switching videos)');
+            }}
+            onStalled={() => {
+              console.log('Playback stalled (buffering)');
+            }}
+            onWaiting={() => {
+              console.log('Waiting for data (buffering)');
             }}
             style={{ 
               '--media-object-fit': 'cover',
@@ -173,14 +226,22 @@ export default function EnhancedVideoPlayer({
       {/* Video Info Overlay */}
       <div className="absolute bottom-20 left-4 right-20 z-10 pointer-events-none">
         <div className="flex items-center mb-3">
-          <div className="w-10 h-10 vind-gradient rounded-full flex items-center justify-center mr-3 pointer-events-auto">
+          <button 
+            onClick={() => onUsernameClick?.(video.username)}
+            className="w-10 h-10 vind-gradient rounded-full flex items-center justify-center mr-3 pointer-events-auto hover:scale-110 transition-all duration-200"
+          >
             <span className="text-sm font-bold text-black">
               {video.username.charAt(0).toUpperCase()}
             </span>
-          </div>
+          </button>
           <div className="flex-1">
             <div className="flex items-center space-x-2">
-              <span className="font-semibold text-white">@{video.username}</span>
+              <button 
+                onClick={() => onUsernameClick?.(video.username)}
+                className="font-semibold text-white hover:text-primary-400 transition-colors pointer-events-auto cursor-pointer"
+              >
+                @{video.username}
+              </button>
               {video.verified && (
                 <div className="w-4 h-4 vind-gradient rounded-full flex items-center justify-center">
                   <span className="text-xs text-black">✓</span>

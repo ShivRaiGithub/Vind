@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, X, Video, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import * as UpChunk from '@mux/upchunk';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface VideoUploadProps {
   onClose: () => void;
@@ -11,12 +12,31 @@ interface VideoUploadProps {
 }
 
 export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadProps) {
+  const { user } = useAuth();
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'complete' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [description, setDescription] = useState('');
-  const [username, setUsername] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Redirect if not logged in
+  if (!user) {
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-gray-900 rounded-2xl max-w-md w-full p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-white mb-2">Login Required</h2>
+          <p className="text-gray-400 mb-4">You need to be logged in to upload videos.</p>
+          <button
+            onClick={onClose}
+            className="vind-gradient text-black font-semibold py-3 px-6 rounded-lg hover:scale-105 transition-all duration-200"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -55,7 +75,7 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
   });
 
   const handleUpload = async () => {
-    if (!selectedFile || !username.trim() || !description.trim()) {
+    if (!selectedFile || !description.trim()) {
       setErrorMessage('Please fill in all fields and select a video');
       return;
     }
@@ -65,9 +85,13 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
       setUploadProgress(0);
 
       // Create upload URL from our API
+      const token = localStorage.getItem('vind_token');
       const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ filename: selectedFile.name }),
       });
 
@@ -106,16 +130,16 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
             const assetResponse = await fetch(`/api/upload?upload_id=${upload_id}`);
             const assetData = await assetResponse.json();
             
-            if (assetData.status === 'asset_created' && assetData.asset_id) {
+            if (assetData.status === 'asset_created' && assetData.asset_id && assetData.playback_id) {
               // Save video to our database
               const videoResponse = await fetch('/api/videos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  username: username.trim(),
+                  username: user.username,
                   description: description.trim(),
                   asset_id: assetData.asset_id,
-                  playback_id: assetData.asset_id, // This would normally come from the asset
+                  playback_id: assetData.playback_id, // Use the actual playback ID from Mux
                 }),
               });
 
@@ -126,6 +150,8 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
                   onUploadComplete(newVideo);
                   onClose();
                 }, 2000);
+              } else {
+                throw new Error('Failed to save video to database');
               }
             } else if (assetData.error) {
               throw new Error(assetData.error.messages?.[0] || 'Processing failed');
@@ -134,12 +160,12 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
               if (attempts < maxAttempts) {
                 setTimeout(pollAsset, 10000); // Poll every 10 seconds
               } else {
-                throw new Error('Processing timeout');
+                throw new Error('Processing timeout - video may still be processing');
               }
             }
           } catch (error) {
             console.error('Asset polling error:', error);
-            setErrorMessage('Video processing failed. Please try again.');
+            setErrorMessage(error instanceof Error ? error.message : 'Video processing failed. Please try again.');
             setUploadStatus('error');
           }
         };
@@ -161,7 +187,7 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
       case 'processing':
         return <Loader className="w-6 h-6 animate-spin" />;
       case 'complete':
-        return <CheckCircle className="w-6 h-6 text-green-400" />;
+        return <CheckCircle className="w-6 h-6 text-primary-500" />;
       case 'error':
         return <AlertCircle className="w-6 h-6 text-red-400" />;
       default:
@@ -205,9 +231,9 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
             {...getRootProps()}
             className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
               isDragActive
-                ? 'border-green-400 bg-green-400/10'
+                ? 'border-primary-500 bg-primary-500/10'
                 : selectedFile
-                ? 'border-green-400 bg-green-400/5'
+                ? 'border-primary-500 bg-primary-500/5'
                 : 'border-gray-600 hover:border-gray-500'
             } ${uploadStatus === 'uploading' || uploadStatus === 'processing' ? 'pointer-events-none opacity-50' : ''}`}
           >
@@ -242,16 +268,11 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Username
+                Uploading as @{user.username}
               </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-400 transition-colors"
-                disabled={uploadStatus === 'uploading' || uploadStatus === 'processing'}
-              />
+              <div className="px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-gray-400">
+                {user.displayName || user.username}
+              </div>
             </div>
 
             <div>
@@ -263,7 +284,7 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What's happening in your Vind?"
                 rows={3}
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-400 transition-colors resize-none"
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 transition-colors resize-none"
                 disabled={uploadStatus === 'uploading' || uploadStatus === 'processing'}
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -277,7 +298,6 @@ export default function VideoUpload({ onClose, onUploadComplete }: VideoUploadPr
             onClick={handleUpload}
             disabled={
               !selectedFile ||
-              !username.trim() ||
               !description.trim() ||
               uploadStatus === 'uploading' ||
               uploadStatus === 'processing' ||

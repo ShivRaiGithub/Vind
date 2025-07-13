@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Send, Heart, MoreHorizontal } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Comment {
   id: string;
@@ -18,92 +19,82 @@ interface CommentsModalProps {
   onClose: () => void;
   videoId: string;
   videoUsername: string;
+  onCommentAdded?: () => void; // Callback when a comment is successfully added
 }
 
-export default function CommentsModal({ isOpen, onClose, videoId, videoUsername }: CommentsModalProps) {
+export default function CommentsModal({ isOpen, onClose, videoId, videoUsername, onCommentAdded }: CommentsModalProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentUser] = useState('you'); // In real app, get from auth
+  
+  const { user } = useAuth();
 
-  // Mock comments data
+  // Fetch comments from database
   useEffect(() => {
-    if (isOpen) {
-      // Simulate loading comments
-      const mockComments: Comment[] = [
-        {
-          id: '1',
-          username: videoUsername,
-          text: 'Thanks for watching! 🙌',
-          likes: 45,
-          timestamp: '2h',
-          isLiked: false,
-          verified: true,
-        },
-        {
-          id: '2',
-          username: 'fan_account',
-          text: 'This is absolutely amazing! How did you do this?',
-          likes: 12,
-          timestamp: '1h',
-          isLiked: true,
-          verified: false,
-        },
-        {
-          id: '3',
-          username: 'creative_soul',
-          text: 'Incredible work! 🔥 Following for more content like this',
-          likes: 8,
-          timestamp: '45m',
-          isLiked: false,
-          verified: false,
-        },
-        {
-          id: '4',
-          username: 'daily_viewer',
-          text: 'Been following since day one, love your content!',
-          likes: 23,
-          timestamp: '30m',
-          isLiked: false,
-          verified: false,
-        },
-        {
-          id: '5',
-          username: 'art_lover',
-          text: 'Tutorial please! 🎨',
-          likes: 6,
-          timestamp: '15m',
-          isLiked: false,
-          verified: false,
-        },
-      ];
-      setComments(mockComments);
+    if (isOpen && videoId) {
+      fetchComments();
     }
-  }, [isOpen, videoUsername]);
+  }, [isOpen, videoId]);
+
+  const fetchComments = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/videos/${videoId}/comments`);
+      const data = await response.json();
+      
+      // Set the isLiked property based on whether current user liked each comment
+      const commentsWithLikeStatus = (data.comments || []).map((comment: any) => ({
+        ...comment,
+        isLiked: comment.likedBy?.includes(user?.username || '') || false,
+      }));
+      
+      setComments(commentsWithLikeStatus);
+    } catch (error) {
+      console.error('Failed to fetch comments:', error);
+      setComments([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmitComment = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || !user?.username) return;
 
     setIsLoading(true);
     
-    // Simulate API call
-    const comment: Comment = {
-      id: Date.now().toString(),
-      username: currentUser,
-      text: newComment.trim(),
-      likes: 0,
-      timestamp: 'now',
-      isLiked: false,
-      verified: false,
-    };
+    try {
+      const response = await fetch(`/api/videos/${videoId}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: newComment.trim(),
+          username: user?.username || 'anonymous',
+        }),
+      });
 
-    setComments([comment, ...comments]);
-    setNewComment('');
-    setIsLoading(false);
+      if (response.ok) {
+        const data = await response.json();
+        // Add the new comment to the top of the list
+        setComments([data.comment, ...comments]);
+        setNewComment('');
+        
+        // Notify parent component that a comment was added
+        onCommentAdded?.();
+      } else {
+        console.error('Failed to post comment');
+      }
+    } catch (error) {
+      console.error('Error posting comment:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleLikeComment = (commentId: string) => {
-    setComments(prev => prev.map(comment => 
+  const handleLikeComment = async (commentId: string) => {
+    // Optimistic update
+    const updatedComments = comments.map(comment => 
       comment.id === commentId 
         ? { 
             ...comment, 
@@ -111,7 +102,30 @@ export default function CommentsModal({ isOpen, onClose, videoId, videoUsername 
             likes: comment.isLiked ? comment.likes - 1 : comment.likes + 1
           }
         : comment
-    ));
+    );
+    setComments(updatedComments);
+
+    try {
+      const response = await fetch(`/api/videos/${videoId}/comments/${commentId}/like`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: user?.username || 'anonymous',
+        }),
+      });
+
+      if (!response.ok) {
+        // Revert optimistic update on failure
+        setComments(comments);
+        console.error('Failed to like comment');
+      }
+    } catch (error) {
+      // Revert optimistic update on error
+      setComments(comments);
+      console.error('Error liking comment:', error);
+    }
   };
 
   if (!isOpen) return null;
@@ -132,7 +146,12 @@ export default function CommentsModal({ isOpen, onClose, videoId, videoUsername 
 
         {/* Comments List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {comments.map((comment) => (
+          {isLoading && comments.length === 0 ? (
+            <div className="flex justify-center py-8">
+              <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : comments.length > 0 ? (
+            comments.map((comment) => (
             <div key={comment.id} className="flex space-x-3">
               {/* Avatar */}
               <div className="w-8 h-8 vind-gradient rounded-full flex items-center justify-center flex-shrink-0">
@@ -178,9 +197,8 @@ export default function CommentsModal({ isOpen, onClose, videoId, videoUsername 
                 </div>
               </div>
             </div>
-          ))}
-
-          {comments.length === 0 && (
+          ))
+          ) : (
             <div className="text-center py-8">
               <p className="text-gray-400 mb-2">No comments yet</p>
               <p className="text-gray-500 text-sm">Be the first to share your thoughts!</p>
@@ -193,7 +211,7 @@ export default function CommentsModal({ isOpen, onClose, videoId, videoUsername 
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 vind-gradient rounded-full flex items-center justify-center flex-shrink-0">
               <span className="text-xs font-bold text-black">
-                {currentUser.charAt(0).toUpperCase()}
+                {(user?.username || 'A').charAt(0).toUpperCase()}
               </span>
             </div>
             <div className="flex-1 relative">
@@ -202,13 +220,13 @@ export default function CommentsModal({ isOpen, onClose, videoId, videoUsername 
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSubmitComment()}
-                placeholder="Add a comment..."
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-full text-white placeholder-gray-400 focus:outline-none focus:border-green-400 pr-12"
-                disabled={isLoading}
+                placeholder={user?.username ? "Add a comment..." : "Please log in to comment"}
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-full text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 pr-12"
+                disabled={isLoading || !user?.username}
               />
               <button
                 onClick={handleSubmitComment}
-                disabled={!newComment.trim() || isLoading}
+                disabled={!newComment.trim() || isLoading || !user?.username}
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 vind-gradient rounded-full disabled:opacity-50 disabled:cursor-not-allowed hover:scale-110 transition-transform"
               >
                 <Send className="w-4 h-4 text-black" />
