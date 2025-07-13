@@ -7,7 +7,7 @@ Vind brings back the magic of short-form video content with a sleek, modern inte
 Vind is a next-generation social video platform that captures the essence of the original Vine while incorporating modern UX patterns and features. Create, share, and discover short videos (6-15 seconds) in an immersive, mobile-first environment.
 
 # Team Details
-**Team Name:** Vind
+**Team Name:** Vind   
 **Solo Member:** Shiv Shakti Rai   
 **Institute:** Graphic Era   
 **Role:** Developing the full application
